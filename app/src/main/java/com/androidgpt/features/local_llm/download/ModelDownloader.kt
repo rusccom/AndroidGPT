@@ -9,6 +9,8 @@ import io.ktor.client.request.headers
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,6 +19,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.io.RandomAccessFile
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -82,20 +86,21 @@ class ModelDownloader @Inject constructor(
     }
 
     private suspend fun writeChannel(
-        channel: io.ktor.utils.io.ByteReadChannel, tmp: java.io.File,
+        channel: ByteReadChannel, tmp: File,
         startAt: Long, total: Long, id: String,
-    ) {
+    ) = withContext(Dispatchers.IO) {
         val buf = ByteArray(64 * 1024)
         RandomAccessFile(tmp, "rw").use { raf ->
             raf.seek(startAt)
             var written = startAt
-            while (!channel.isClosedForRead) {
-                val n = channel.readAvailable(buf, 0, buf.size)
-                if (n < 0) break
-                if (n == 0) continue
-                raf.write(buf, 0, n)
-                written += n
-                emit(DownloadProgress(id, written, total, DownloadProgress.State.RUNNING))
+            channel.toInputStream().use { input ->
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    raf.write(buf, 0, n)
+                    written += n
+                    emit(DownloadProgress(id, written, total, DownloadProgress.State.RUNNING))
+                }
             }
         }
     }
