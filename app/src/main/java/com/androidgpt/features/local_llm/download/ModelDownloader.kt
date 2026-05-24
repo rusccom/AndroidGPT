@@ -9,7 +9,6 @@ import io.ktor.client.request.headers
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
-import io.ktor.utils.io.core.readBytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -86,15 +85,16 @@ class ModelDownloader @Inject constructor(
         channel: io.ktor.utils.io.ByteReadChannel, tmp: java.io.File,
         startAt: Long, total: Long, id: String,
     ) {
+        val buf = ByteArray(64 * 1024)
         RandomAccessFile(tmp, "rw").use { raf ->
             raf.seek(startAt)
             var written = startAt
             while (!channel.isClosedForRead) {
-                val packet = channel.readRemaining(64 * 1024)
-                val bytes = packet.readBytes()
-                if (bytes.isEmpty()) continue
-                raf.write(bytes)
-                written += bytes.size
+                val n = channel.readAvailable(buf, 0, buf.size)
+                if (n < 0) break
+                if (n == 0) continue
+                raf.write(buf, 0, n)
+                written += n
                 emit(DownloadProgress(id, written, total, DownloadProgress.State.RUNNING))
             }
         }

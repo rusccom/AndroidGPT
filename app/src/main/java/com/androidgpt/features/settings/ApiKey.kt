@@ -1,7 +1,7 @@
 package com.androidgpt.features.settings
 
 enum class ApiKey(val storageKey: String, val title: String, val hint: String) {
-    OpenAI("key_openai", "OpenAI API Key", "sk-..."),
+    OpenAi("key_openai", "OpenAI API Key", "sk-..."),
     Gemini("key_gemini", "Google AI / Gemini Key", "AIza..."),
     HomeAssistantUrl("key_ha_url", "Home Assistant URL", "http://homeassistant.local:8123"),
     HomeAssistantToken("key_ha_token", "Home Assistant Token", "Long-lived token"),
@@ -10,7 +10,7 @@ enum class ApiKey(val storageKey: String, val title: String, val hint: String) {
     CatalogUrl("key_catalog_url", "Удалённый каталог моделей", "https://example.com/catalog.json"),
 }
 
-enum class ExpertProvider(val storageKey: String = "expert_provider", val title: String) {
+enum class ExpertProvider(val title: String) {
     OpenAi("OpenAI Realtime"),
     Gemini("Google Gemini Live");
 
