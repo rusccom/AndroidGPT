@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "updated": "2026-05-24",
+  "models": [
+    {
+      "id": "gemma-2-2b-it-q4",
+      "name": "Gemma 2 2B Instruct (Q4_K_M)",
+      "url": "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+      "sha256": null,
+      "size_bytes": 1630000000,
+      "context": 8192,
+      "ram_min_mb": 2048,
+      "languages": ["ru", "en"],
+      "use_case": "router",
+      "recommended": true
+    },
+    {
+      "id": "qwen-2.5-3b-instruct-q4",
+      "name": "Qwen 2.5 3B Instruct (Q4_K_M)",
+      "url": "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+      "sha256": null,
+      "size_bytes": 1980000000,
+      "context": 32768,
+      "ram_min_mb": 3072,
+      "languages": ["ru", "en", "zh"],
+      "use_case": "chat",
+      "recommended": true
+    },
+    {
+      "id": "phi-3.5-mini-instruct-q4",
+      "name": "Phi-3.5 Mini Instruct (Q4_K_M)",
+      "url": "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
+      "sha256": null,
+      "size_bytes": 2400000000,
+      "context": 131072,
+      "ram_min_mb": 3584,
+      "languages": ["ru", "en"],
+      "use_case": "chat",
+      "recommended": false
+    },
+    {
+      "id": "smollm2-1.7b-instruct-q4",
+      "name": "SmolLM2 1.7B Instruct (Q4_K_M)",
+      "url": "https://huggingface.co/bartowski/SmolLM2-1.7B-Instruct-GGUF/resolve/main/SmolLM2-1.7B-Instruct-Q4_K_M.gguf",
+      "sha256": null,
+      "size_bytes": 1100000000,
+      "context": 8192,
+      "ram_min_mb": 1536,
+      "languages": ["en"],
+      "use_case": "router",
+      "recommended": false
+    }
+  ]
+}

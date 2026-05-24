@@ -1,0 +1,4 @@
+-keep class com.androidgpt.** { *; }
+-keepclassmembers class kotlinx.serialization.json.** { *; }
+-keepattributes *Annotation*, InnerClasses
+-dontwarn org.slf4j.**

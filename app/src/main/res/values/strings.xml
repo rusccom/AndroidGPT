@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">AndroidGPT</string>
+    <string name="nav_home">Главная</string>
+    <string name="nav_assistant">Ассистент</string>
+    <string name="nav_models">Модели</string>
+    <string name="nav_settings">Настройки</string>
+    <string name="nav_expert">Эксперт</string>
+    <string name="channel_expert">Режим Эксперта</string>
+    <string name="channel_wake">Слушаю</string>
+    <string name="channel_call">Звонок</string>
+    <string name="channel_alarm">Будильник</string>
+</resources>
