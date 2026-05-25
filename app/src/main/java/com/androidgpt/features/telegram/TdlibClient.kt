@@ -7,14 +7,14 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import org.drinkless.td.libcore.telegram.Client
-import org.drinkless.td.libcore.telegram.TdApi
+import org.drinkless.tdlib.Client
+import org.drinkless.tdlib.TdApi
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Обёртка над TDLib (com.github.tdlibx:td). QR-логин:
+ * Обёртка над TDLib (com.github.tdlibx:td 1.8.56). QR-логин:
  *  1) start() создаёт Client и слушает UpdateAuthorizationState
  *  2) WaitTdlibParameters → SetTdlibParameters
  *  3) WaitPhoneNumber → RequestQrCodeAuthentication
@@ -35,7 +35,11 @@ class TdlibClient @Inject constructor(
     fun start() {
         if (client != null) return
         _auth.value = TdlibAuthState.Initializing
-        client = Client.create({ obj -> handleUpdate(obj) }, null, null)
+        client = Client.create(
+            Client.ResultHandler { obj -> handleUpdate(obj) },
+            null,
+            null,
+        )
     }
 
     fun stop() {
@@ -44,10 +48,13 @@ class TdlibClient @Inject constructor(
         _auth.value = TdlibAuthState.LoggedOut
     }
 
-    suspend fun submitPassword(password: String) {
-        client?.send(TdApi.CheckAuthenticationPassword(password), { result ->
-            if (result is TdApi.Error) _auth.value = TdlibAuthState.Error("password: ${result.message}")
-        })
+    fun submitPassword(password: String) {
+        client?.send(
+            TdApi.CheckAuthenticationPassword(password),
+            Client.ResultHandler { result ->
+                if (result is TdApi.Error) _auth.value = TdlibAuthState.Error("password: ${result.message}")
+            },
+        )
     }
 
     private fun handleUpdate(obj: TdApi.Object) {
@@ -84,38 +91,42 @@ class TdlibClient @Inject constructor(
             systemVersion = android.os.Build.VERSION.RELEASE
             applicationVersion = "1.0"
         }
-        client?.send(params) { res ->
+        client?.send(params, Client.ResultHandler { res ->
             if (res is TdApi.Error) _auth.value = TdlibAuthState.Error("params: ${res.message}")
-        }
+        })
     }
 
     private fun requestQr() {
-        client?.send(TdApi.RequestQrCodeAuthentication(LongArray(0))) { res ->
-            if (res is TdApi.Error) _auth.value = TdlibAuthState.Error("qr: ${res.message}")
-        }
+        client?.send(
+            TdApi.RequestQrCodeAuthentication(LongArray(0)),
+            Client.ResultHandler { res ->
+                if (res is TdApi.Error) _auth.value = TdlibAuthState.Error("qr: ${res.message}")
+            },
+        )
     }
 
     private fun onReady() {
         _auth.value = TdlibAuthState.Ready
-        client?.send(TdApi.GetContacts()) { res ->
+        client?.send(TdApi.GetContacts(), Client.ResultHandler { res ->
             if (res is TdApi.Users) loadUsers(res.userIds)
-        }
+        })
     }
 
     private fun loadUsers(ids: LongArray) {
         val acc = mutableListOf<TgContact>()
         ids.forEach { id ->
-            client?.send(TdApi.GetUser(id)) { res ->
+            client?.send(TdApi.GetUser(id), Client.ResultHandler { res ->
                 if (res is TdApi.User) {
                     acc += TgContact(
                         userId = res.id,
-                        displayName = listOfNotNull(res.firstName, res.lastName).joinToString(" ").trim(),
+                        displayName = listOf(res.firstName, res.lastName)
+                            .filter { it.isNotBlank() }.joinToString(" "),
                         username = res.usernames?.activeUsernames?.firstOrNull(),
-                        phone = res.phoneNumber.ifBlank { null },
+                        phone = res.phoneNumber.takeIf { it.isNotBlank() },
                     )
                     if (acc.size == ids.size) contacts.setCache(acc.toList())
                 }
-            }
+            })
         }
     }
 }
