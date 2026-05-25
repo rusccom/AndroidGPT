@@ -36,6 +36,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AndroidGPT"
         android:usesCleartextTraffic="false"
+        tools:replace="android:allowBackup"
         tools:targetApi="33">
 
         <activity

@@ -84,7 +84,11 @@ dependencies {
 
     implementation(libs.vosk.android)
     implementation(libs.llamacpp.kotlin)
-    implementation(libs.tdlib.android)
+    implementation(libs.tdlib.android) {
+        exclude(group = "androidx.core")
+        exclude(group = "androidx.appcompat")
+        exclude(group = "com.google.android.material")
+    }
     implementation(libs.zxing.core)
 
     // ─── External SDKs to enable later ─────────────────────────────
