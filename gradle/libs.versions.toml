@@ -18,6 +18,8 @@ room = "2.6.1"
 workManager = "2.10.0"
 vosk = "0.3.47"
 llamacpp = "0.4.0"
+tdlib = "1.8.56"
+zxing = "3.5.3"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -57,6 +59,8 @@ ktor-serialization-json = { module = "io.ktor:ktor-serialization-kotlinx-json", 
 
 vosk-android = { module = "com.alphacephei:vosk-android", version.ref = "vosk" }
 llamacpp-kotlin = { module = "io.github.ljcamargo:llamacpp-kotlin", version.ref = "llamacpp" }
+tdlib-android = { module = "com.github.tdlibx:td", version.ref = "tdlib" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

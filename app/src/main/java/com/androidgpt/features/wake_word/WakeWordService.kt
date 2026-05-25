@@ -11,15 +11,20 @@ import com.androidgpt.features.assistant.AssistantBus
 import com.androidgpt.features.assistant.AssistantPhase
 import com.androidgpt.features.assistant.AssistantOrchestrator
 import com.androidgpt.features.local_llm.ModelManager
+import com.androidgpt.features.voice.LocalTts
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -31,6 +36,7 @@ class WakeWordService : Service() {
     @Inject lateinit var orchestrator: AssistantOrchestrator
     @Inject lateinit var bus: AssistantBus
     @Inject lateinit var models: ModelManager
+    @Inject lateinit var tts: LocalTts
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var loopJob: Job? = null
@@ -47,7 +53,7 @@ class WakeWordService : Service() {
     }
 
     override fun onDestroy() {
-        wake.stop(); command.stop()
+        wake.stop(); command.stop(); tts.stop()
         loopJob?.cancel()
         scope.cancel()
         super.onDestroy()
@@ -59,26 +65,32 @@ class WakeWordService : Service() {
             bus.setError("Модель Vosk не найдена. Положи vosk-model-small-ru в app/src/main/assets/model-ru/")
             return
         }
+        var bargeIn = false
         while (scope.isActive) {
-            bus.setPhase(AssistantPhase.WAITING_WAKE)
-            val woke = runCatching { wake.detections().first() }
-            wake.stop()
-            if (woke.isFailure) { bus.setError(woke.exceptionOrNull()?.message ?: "wake error"); continue }
-            handleCommand()
+            if (!bargeIn) {
+                bus.setPhase(AssistantPhase.WAITING_WAKE)
+                val woke = runCatching { wake.detections().first() }
+                wake.stop()
+                if (woke.isFailure) { bus.setError(woke.exceptionOrNull()?.message ?: "wake error"); continue }
+            }
+            bargeIn = handleCommand()
         }
     }
 
-    private suspend fun handleCommand() {
+    private suspend fun handleCommand(): Boolean {
         bus.setPhase(AssistantPhase.LISTENING)
         val text = runCatching { collectCommand() }.getOrElse {
-            bus.setError(it.message ?: "stt error"); return
+            bus.setError(it.message ?: "stt error"); return false
         }
-        if (text.isBlank()) return
+        if (text.isBlank()) return false
         bus.setHeard(text)
         bus.setPhase(AssistantPhase.THINKING)
-        runCatching { orchestrator.handle(text) }
-            .onSuccess { bus.setReply(it.reply, it.nextAction) }
-            .onFailure { bus.setError(it.message ?: "orchestrator error") }
+        val result = runCatching { orchestrator.handle(text) }.getOrElse {
+            bus.setError(it.message ?: "orchestrator error"); return false
+        }
+        bus.setReply(result.reply, result.nextAction)
+        if (result.reply.isBlank()) return false
+        return speakWithBargeIn(result.reply)
     }
 
     private suspend fun collectCommand(): String {
@@ -92,6 +104,24 @@ class WakeWordService : Service() {
         return last
     }
 
+    private suspend fun speakWithBargeIn(text: String): Boolean = coroutineScope {
+        bus.setPhase(AssistantPhase.REPLYING)
+        val speakJob: Deferred<Boolean> = async { tts.speak(text); false }
+        val wakeJob: Deferred<Boolean> = async {
+            runCatching { wake.detections().first() }.isSuccess
+        }
+        val interrupted = select<Boolean> {
+            speakJob.onAwait { it }
+            wakeJob.onAwait { hit ->
+                if (hit) tts.stop()
+                hit
+            }
+        }
+        speakJob.cancel(); wakeJob.cancel()
+        wake.stop()
+        interrupted
+    }
+
     private fun buildNotification(): Notification {
         val open = PendingIntent.getActivity(
             this, 0,
@@ -100,7 +130,7 @@ class WakeWordService : Service() {
         )
         return NotificationCompat.Builder(this, "wake")
             .setContentTitle("Слушаю «Sam»")
-            .setContentText("Скажи Sam для начала команды")
+            .setContentText("Скажи Sam — могу перебить ответ")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(open)
             .setOngoing(true)

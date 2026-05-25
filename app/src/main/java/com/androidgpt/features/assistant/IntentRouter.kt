@@ -20,10 +20,12 @@ class IntentRouter @Inject constructor(
     private fun keywordRoute(text: String): RoutedIntent {
         val t = text.lowercase()
         val tool = when {
-            "будильник" in t || "разбуди" in t -> "set_alarm"
+            "напомни" in t || "будильник" in t || "разбуди" in t -> "set_alarm"
             "таймер" in t -> "set_timer"
             "видео" in t || "ютуб" in t -> "play_video"
             "свет" in t || "лампу" in t || "розетку" in t -> "smart_home"
+            "громкост" in t || "громче" in t || "тише" in t ||
+                "яркост" in t || "блютуз" in t || "bluetooth" in t -> "system_control"
             "позвони" in t && "эксперт" in t -> "expert_mode"
             "позвони" in t -> "telegram_call"
             "эксперт" in t -> "expert_mode"
@@ -33,8 +35,25 @@ class IntentRouter @Inject constructor(
             put("raw", text)
             if (tool == "telegram_call") put("contact", text.substringAfter("позвони").trim().substringBefore(" "))
             if (tool == "play_video") put("query", text)
+            if (tool == "system_control") fillSystemArgs(this, t)
         }
         return RoutedIntent(tool, args)
+    }
+
+    private fun fillSystemArgs(b: kotlinx.serialization.json.JsonObjectBuilder, t: String) {
+        val action = when {
+            "громче" in t -> "volume_up"
+            "тише" in t -> "volume_down"
+            "выключи звук" in t || "беззвучн" in t || "mute" in t -> "mute"
+            "громкост" in t -> "volume_set"
+            "яркост" in t -> "brightness_set"
+            "блютуз" in t && "выключ" in t -> "bluetooth_off"
+            "блютуз" in t && "включ" in t -> "bluetooth_on"
+            "блютуз" in t || "bluetooth" in t -> "bluetooth_toggle"
+            else -> "volume_set"
+        }
+        b.put("action", action)
+        Regex("(\\d{1,3})").find(t)?.value?.toIntOrNull()?.let { b.put("value", it) }
     }
 
     private fun parse(raw: String, fallbackText: String): RoutedIntent? = runCatching {
@@ -54,10 +73,11 @@ class IntentRouter @Inject constructor(
         { "tool": "<name>", "args": {...} }
 
         Доступные tools:
-        - set_alarm(time:"HH:mm", label?)
+        - set_alarm(time?:"HH:mm", raw?:string, label?)  // raw для "через 2 часа", "в среду в 9"
         - set_timer(seconds:number, label?)
         - play_video(query)
         - smart_home(entity, action)
+        - system_control(action:"volume_up|volume_down|volume_set|mute|brightness_set|bluetooth_toggle", value?:0..100)
         - telegram_call(contact, with_video?)
         - expert_mode(topic?)
         - chat(raw)

@@ -5,6 +5,7 @@ import com.androidgpt.features.tools.chat.ChatTool
 import com.androidgpt.features.tools.expert.ExpertModeTool
 import com.androidgpt.features.tools.media.MediaTool
 import com.androidgpt.features.tools.smart_home.SmartHomeTool
+import com.androidgpt.features.tools.system.SystemControlTool
 import com.androidgpt.features.tools.telegram_call.TelegramCallTool
 import com.androidgpt.features.tools.timer.TimerTool
 import javax.inject.Inject
@@ -18,10 +19,12 @@ class ToolRegistry @Inject constructor(
     smartHome: SmartHomeTool,
     telegramCall: TelegramCallTool,
     expert: ExpertModeTool,
+    system: SystemControlTool,
     chat: ChatTool,
 ) {
-    private val tools: Map<String, Tool> = listOf(alarm, timer, media, smartHome, telegramCall, expert, chat)
-        .associateBy { it.name }
+    private val tools: Map<String, Tool> = listOf(
+        alarm, timer, media, smartHome, telegramCall, expert, system, chat,
+    ).associateBy { it.name }
 
     fun all(): Collection<Tool> = tools.values
     fun find(name: String): Tool? = tools[name]

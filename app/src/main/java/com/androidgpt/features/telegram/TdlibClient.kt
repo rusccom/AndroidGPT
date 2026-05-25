@@ -1,36 +1,121 @@
 package com.androidgpt.features.telegram
 
+import android.content.Context
+import com.androidgpt.features.settings.ApiKey
+import com.androidgpt.features.settings.ApiKeysRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import org.drinkless.td.libcore.telegram.Client
+import org.drinkless.td.libcore.telegram.TdApi
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Заглушка клиента TDLib.
- *
- * Чтобы подключить реальный Telegram:
- *  1) Добавить в app/build.gradle.kts:
- *       implementation("org.drinkless:tdlib:1.8.x")
- *     (или собрать TDLib для Android по инструкции github.com/tdlib/td)
- *  2) В TdlibClient.start():
- *       Client.create(updatesHandler, ...) и хранить экземпляр
- *  3) Реализовать send(query) → suspend Result<TdApi.Object>
- *  4) Реализовать sendCheckAuthenticationCode, setTdlibParameters и т.д.
- *  5) Заполнить TelegramContacts.setCache(...) после GetContacts.
+ * Обёртка над TDLib (com.github.tdlibx:td). QR-логин:
+ *  1) start() создаёт Client и слушает UpdateAuthorizationState
+ *  2) WaitTdlibParameters → SetTdlibParameters
+ *  3) WaitPhoneNumber → RequestQrCodeAuthentication
+ *  4) WaitOtherDeviceConfirmation → emits WaitQrScan(link) — UI рисует QR
+ *  5) Ready
  */
 @Singleton
-class TdlibClient @Inject constructor() {
+class TdlibClient @Inject constructor(
+    @ApplicationContext private val ctx: Context,
+    private val keys: ApiKeysRepository,
+    private val contacts: TelegramContacts,
+) {
+    private val _auth = MutableStateFlow<TdlibAuthState>(TdlibAuthState.Idle)
+    val auth: StateFlow<TdlibAuthState> = _auth.asStateFlow()
 
-    enum class AuthState { LoggedOut, WaitPhone, WaitCode, WaitPassword, Ready }
+    @Volatile private var client: Client? = null
 
-    @Volatile var authState: AuthState = AuthState.LoggedOut
-        private set
+    fun start() {
+        if (client != null) return
+        _auth.value = TdlibAuthState.Initializing
+        client = Client.create({ obj -> handleUpdate(obj) }, null, null)
+    }
 
-    fun start() { /* TDLib.create(...) */ }
+    fun stop() {
+        client?.send(TdApi.Close(), null)
+        client = null
+        _auth.value = TdlibAuthState.LoggedOut
+    }
 
-    suspend fun submitPhone(phone: String) { authState = AuthState.WaitCode }
+    suspend fun submitPassword(password: String) {
+        client?.send(TdApi.CheckAuthenticationPassword(password), { result ->
+            if (result is TdApi.Error) _auth.value = TdlibAuthState.Error("password: ${result.message}")
+        })
+    }
 
-    suspend fun submitCode(code: String) { authState = AuthState.Ready }
+    private fun handleUpdate(obj: TdApi.Object) {
+        if (obj !is TdApi.UpdateAuthorizationState) return
+        when (val s = obj.authorizationState) {
+            is TdApi.AuthorizationStateWaitTdlibParameters -> sendParameters()
+            is TdApi.AuthorizationStateWaitPhoneNumber -> requestQr()
+            is TdApi.AuthorizationStateWaitOtherDeviceConfirmation ->
+                _auth.value = TdlibAuthState.WaitQrScan(s.link)
+            is TdApi.AuthorizationStateWaitPassword -> _auth.value = TdlibAuthState.WaitPassword
+            is TdApi.AuthorizationStateReady -> onReady()
+            is TdApi.AuthorizationStateLoggingOut -> _auth.value = TdlibAuthState.LoggedOut
+            is TdApi.AuthorizationStateClosed -> { client = null; _auth.value = TdlibAuthState.LoggedOut }
+            else -> Unit
+        }
+    }
 
-    suspend fun submitPassword(password: String) { authState = AuthState.Ready }
+    private fun sendParameters() {
+        val apiId = keys.get(ApiKey.TelegramApiId).toIntOrNull()
+        val apiHash = keys.get(ApiKey.TelegramApiHash)
+        if (apiId == null || apiHash.isBlank()) {
+            _auth.value = TdlibAuthState.MissingApiCredentials
+            return
+        }
+        val params = TdApi.SetTdlibParameters().apply {
+            databaseDirectory = File(ctx.filesDir, "tdlib").absolutePath
+            filesDirectory = File(ctx.filesDir, "tdlib_files").absolutePath
+            useMessageDatabase = true
+            useSecretChats = false
+            this.apiId = apiId
+            this.apiHash = apiHash
+            systemLanguageCode = "ru"
+            deviceModel = android.os.Build.MODEL
+            systemVersion = android.os.Build.VERSION.RELEASE
+            applicationVersion = "1.0"
+        }
+        client?.send(params) { res ->
+            if (res is TdApi.Error) _auth.value = TdlibAuthState.Error("params: ${res.message}")
+        }
+    }
 
-    suspend fun logout() { authState = AuthState.LoggedOut }
+    private fun requestQr() {
+        client?.send(TdApi.RequestQrCodeAuthentication(LongArray(0))) { res ->
+            if (res is TdApi.Error) _auth.value = TdlibAuthState.Error("qr: ${res.message}")
+        }
+    }
+
+    private fun onReady() {
+        _auth.value = TdlibAuthState.Ready
+        client?.send(TdApi.GetContacts()) { res ->
+            if (res is TdApi.Users) loadUsers(res.userIds)
+        }
+    }
+
+    private fun loadUsers(ids: LongArray) {
+        val acc = mutableListOf<TgContact>()
+        ids.forEach { id ->
+            client?.send(TdApi.GetUser(id)) { res ->
+                if (res is TdApi.User) {
+                    acc += TgContact(
+                        userId = res.id,
+                        displayName = listOfNotNull(res.firstName, res.lastName).joinToString(" ").trim(),
+                        username = res.usernames?.activeUsernames?.firstOrNull(),
+                        phone = res.phoneNumber.ifBlank { null },
+                    )
+                    if (acc.size == ids.size) contacts.setCache(acc.toList())
+                }
+            }
+        }
+    }
 }

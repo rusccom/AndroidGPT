@@ -9,6 +9,7 @@ import javax.inject.Inject
 
 class ChatTool @Inject constructor(
     private val session: LlamaSession,
+    private val history: DialogHistory,
 ) : Tool {
     override val name = "chat"
     override val description = "Ответить пользователю коротким диалогом. args: {raw: string}"
@@ -22,18 +23,22 @@ class ChatTool @Inject constructor(
                 ok = false,
             )
         }
-        val reply = runCatching { session.engine().complete(buildPrompt(text)) }
+        val prompt = buildPrompt(text, history.snapshot())
+        val reply = runCatching { session.engine().complete(prompt) }
             .getOrElse { return ToolResult("Не получилось ответить: ${it.message}", ok = false) }
-        val cleaned = trim(reply)
-        return ToolResult(cleaned.ifBlank { "Не знаю, что ответить." })
+        val cleaned = trim(reply).ifBlank { "Не знаю, что ответить." }
+        history.add(DialogTurn(text, cleaned))
+        return ToolResult(cleaned)
     }
 
-    private fun buildPrompt(userText: String): String = """
-        Ты — голосовой ассистент. Отвечай на русском, одним-двумя короткими предложениями, без вступлений.
-
-        Пользователь: $userText
-        Ассистент:
-    """.trimIndent()
+    private fun buildPrompt(userText: String, past: List<DialogTurn>): String = buildString {
+        append("Ты — голосовой ассистент. Отвечай на русском, одним-двумя короткими предложениями, без вступлений.\n\n")
+        past.forEach {
+            append("Пользователь: ${it.user}\n")
+            append("Ассистент: ${it.assistant}\n")
+        }
+        append("Пользователь: $userText\nАссистент:")
+    }
 
     private fun trim(raw: String): String {
         var s = raw.trim()

@@ -84,6 +84,8 @@ dependencies {
 
     implementation(libs.vosk.android)
     implementation(libs.llamacpp.kotlin)
+    implementation(libs.tdlib.android)
+    implementation(libs.zxing.core)
 
     // ─── External SDKs to enable later ─────────────────────────────
     // implementation("org.drinkless:tdlib:1.8.x")            // Telegram TDLib

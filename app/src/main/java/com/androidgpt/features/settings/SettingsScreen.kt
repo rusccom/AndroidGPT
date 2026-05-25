@@ -28,6 +28,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.androidgpt.features.telegram.ui.TelegramAuthSection
 
 @Composable
 fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
@@ -53,6 +54,7 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
                 )
             }
         }
+        SectionCard(title = "Telegram") { TelegramAuthSection() }
         SectionCard(title = "Режим Эксперта") {
             Text("Провайдер", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -10,22 +10,53 @@ import com.androidgpt.features.tools.ToolResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
+/**
+ * Будильник / напоминание. Поддерживает явный time="HH:mm" либо разбор raw на русском
+ * ("через 2 часа", "в среду в 9", "завтра в 8 утра").
+ */
 class AlarmTool @Inject constructor(
     @ApplicationContext private val ctx: Context,
 ) : Tool {
     override val name = "set_alarm"
-    override val description = "Поставить будильник. args: {time: 'HH:mm', label?: string}"
+    override val description = "Будильник/напоминание. args: {time?: 'HH:mm', raw?: string, label?: string}"
 
     override suspend fun execute(args: JsonObject): ToolResult {
-        val time = args["time"]?.jsonPrimitive?.content ?: return error("Не указано время")
         val label = args["label"]?.jsonPrimitive?.content
-        val parsed = parseTime(time) ?: return error("Неверный формат времени: $time")
-        val trigger = nextTriggerAt(parsed.first, parsed.second)
+        val explicit = args["time"]?.jsonPrimitive?.content
+        val raw = args["raw"]?.jsonPrimitive?.content
+        val trigger = resolveTrigger(explicit, raw) ?: return error("Не понял время")
         scheduleExact(trigger, label)
-        return ToolResult(reply = "Будильник на ${"%02d:%02d".format(parsed.first, parsed.second)} установлен")
+        return ToolResult("Поставлено на ${formatHm(trigger)}")
+    }
+
+    private fun resolveTrigger(explicit: String?, raw: String?): Long? {
+        explicit?.let { parseHm(it) }?.let { (h, m) -> return nextAtHm(h, m) }
+        raw?.let { TimeParser.parse(it) }?.let { return it }
+        return null
+    }
+
+    private fun parseHm(text: String): Pair<Int, Int>? {
+        val parts = text.split(":")
+        if (parts.size != 2) return null
+        val h = parts[0].trim().toIntOrNull() ?: return null
+        val m = parts[1].trim().toIntOrNull() ?: return null
+        if (h !in 0..23 || m !in 0..59) return null
+        return h to m
+    }
+
+    private fun nextAtHm(hour: Int, minute: Int): Long {
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DATE, 1)
+        }
+        return cal.timeInMillis
     }
 
     private fun scheduleExact(triggerMs: Long, label: String?) {
@@ -42,24 +73,9 @@ class AlarmTool @Inject constructor(
     private fun flags(): Int =
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
-    private fun parseTime(text: String): Pair<Int, Int>? {
-        val parts = text.split(":")
-        if (parts.size != 2) return null
-        val h = parts[0].trim().toIntOrNull() ?: return null
-        val m = parts[1].trim().toIntOrNull() ?: return null
-        if (h !in 0..23 || m !in 0..59) return null
-        return h to m
-    }
-
-    private fun nextTriggerAt(hour: Int, minute: Int): Long {
-        val cal = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, hour)
-            set(Calendar.MINUTE, minute)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-            if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DATE, 1)
-        }
-        return cal.timeInMillis
+    private fun formatHm(ms: Long): String {
+        val fmt = SimpleDateFormat("EEE HH:mm", Locale("ru"))
+        return fmt.format(Date(ms))
     }
 
     private fun error(msg: String) = ToolResult(reply = msg, ok = false)
