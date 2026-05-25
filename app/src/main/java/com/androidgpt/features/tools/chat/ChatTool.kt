@@ -11,22 +11,38 @@ class ChatTool @Inject constructor(
     private val session: LlamaSession,
 ) : Tool {
     override val name = "chat"
-    override val description = "Ответить пользователю простым диалогом. args: {raw: string}"
+    override val description = "Ответить пользователю коротким диалогом. args: {raw: string}"
 
     override suspend fun execute(args: JsonObject): ToolResult {
-        val text = args["raw"]?.jsonPrimitive?.content ?: ""
+        val text = args["raw"]?.jsonPrimitive?.content.orEmpty()
+        if (text.isBlank()) return ToolResult("Не услышал команду.", ok = false)
         if (!session.engine().isLoaded()) {
             return ToolResult(
-                reply = "Локальная модель не загружена. Скачай и выбери модель в разделе «Модели».",
+                "Локальная модель не загружена. Скачай и активируй модель в разделе «Модели».",
+                ok = false,
             )
         }
-        val prompt = """
-            <s>[INST] Ответь коротко и по делу на русском. [/INST]
-            Пользователь: $text
-            Ассистент:
-        """.trimIndent()
-        val reply = runCatching { session.engine().complete(prompt) }
-            .getOrElse { "Не получилось обработать: ${it.message}" }
-        return ToolResult(reply = reply.ifBlank { "..." })
+        val reply = runCatching { session.engine().complete(buildPrompt(text)) }
+            .getOrElse { return ToolResult("Не получилось ответить: ${it.message}", ok = false) }
+        val cleaned = trim(reply)
+        return ToolResult(cleaned.ifBlank { "Не знаю, что ответить." })
     }
+
+    private fun buildPrompt(userText: String): String = """
+        Ты — голосовой ассистент. Отвечай на русском, одним-двумя короткими предложениями, без вступлений.
+
+        Пользователь: $userText
+        Ассистент:
+    """.trimIndent()
+
+    private fun trim(raw: String): String {
+        var s = raw.trim()
+        listOf("Пользователь:", "Ассистент:", "\n\n").forEach { marker ->
+            val idx = s.indexOf(marker)
+            if (idx > 0) s = s.substring(0, idx).trim()
+        }
+        return s.take(MAX_REPLY)
+    }
+
+    companion object { const val MAX_REPLY = 500 }
 }

@@ -36,6 +36,10 @@ android {
         resources.excludes += setOf(
             "META-INF/AL2.0", "META-INF/LGPL2.1", "META-INF/*.kotlin_module"
         )
+        jniLibs { useLegacyPackaging = true }
+    }
+    androidResources {
+        noCompress += listOf("mdl", "raw", "ie", "graph", "conf", "fst", "carpa", "pgm", "ngram")
     }
 }
 
@@ -78,8 +82,10 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.work.runtime)
 
+    implementation(libs.vosk.android)
+    implementation(libs.llamacpp.kotlin)
+
     // ─── External SDKs to enable later ─────────────────────────────
     // implementation("org.drinkless:tdlib:1.8.x")            // Telegram TDLib
-    // implementation("ai.picovoice:porcupine-android:3.x")   // Wake-word
     // implementation("com.github.ggerganov:llama.android:...") // llama.cpp
 }

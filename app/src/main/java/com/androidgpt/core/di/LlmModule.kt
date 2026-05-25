@@ -1,8 +1,9 @@
 package com.androidgpt.core.di
 
 import com.androidgpt.core.network.HttpClientFactory
+import com.androidgpt.features.local_llm.runtime.LlamaCppEngine
 import com.androidgpt.features.local_llm.runtime.LlamaEngine
-import com.androidgpt.features.local_llm.runtime.StubLlamaEngine
+import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -12,14 +13,15 @@ import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-object LlmModule {
+abstract class LlmModule {
 
-    @Provides
+    @Binds
     @Singleton
-    fun provideJson(factory: HttpClientFactory): Json = factory.json
+    abstract fun bindLlamaEngine(impl: LlamaCppEngine): LlamaEngine
 
-    @Provides
-    @Singleton
-    fun provideLlamaEngine(): LlamaEngine = StubLlamaEngine()
-    // TODO: заменить на JNI-обёртку llama.cpp когда подключите нативку
+    companion object {
+        @Provides
+        @Singleton
+        fun provideJson(factory: HttpClientFactory): Json = factory.json
+    }
 }

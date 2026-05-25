@@ -25,9 +25,10 @@ fun HomeScreen(onOpenAssistant: () -> Unit) {
                 Text("Готов к работе", style = MaterialTheme.typography.titleLarge)
                 Text(
                     "1. Заполни ключи в Настройках\n" +
-                        "2. Скачай модель в разделе Модели\n" +
-                        "3. Нажми Ассистент для разговора\n" +
-                        "4. Скажи «позвони эксперту» для Realtime",
+                        "2. Скачай LLM в разделе Модели\n" +
+                        "3. Положи Vosk-модель в assets/model-ru\n" +
+                        "4. Скажи «Sam» — и сразу команду\n" +
+                        "5. «Sam, позвони эксперту» — Realtime",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
